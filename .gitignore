@@ -1,0 +1,4 @@
+.env
+Trash/
+__pycache__/
+phonebook/
