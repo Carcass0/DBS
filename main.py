@@ -4,12 +4,16 @@ OVERALL TO-DO:
 REFORMAT
 INCREASE READABILITY
 IMPLEMENT LOGGING
+TEST PERFORMANCE WITH MAXIMIZED SERVER SIDE EXECUTION
+ADD CRUD WITH PARENT TABLES
+REMOVE NOT NULL RESTRICTIONS IN THE DATABASE
 """
 
 from dotenv import load_dotenv
 from os import getenv
 from sys import argv
 from typing import Any
+from time import sleep
 
 import psycopg2
 from PyQt6 import QtWidgets
@@ -31,7 +35,6 @@ class mainwindow(QtWidgets.QMainWindow):
     """
     TO-DO:
     SWITCH TABLEWIDGET TO TABLEVIEW
-    ДОБАВИТЬ ФУНКЦИОНАЛ КНОПКЕ ПРИКОЛ
     MERGE GET_FKEY_VALUES AND GET_SPECIFIC_FKEY
     MAINTAIN CONSISTENT ORDER OF ENTRIES WHEN UPDATING
     """
@@ -59,6 +62,10 @@ class mainwindow(QtWidgets.QMainWindow):
         self.ui.delete_button.clicked.connect(lambda: self.__deletion_mode())
         self.ui.search_button.clicked.connect(lambda: self.__perform_search())
         self.ui.search_reset_button.clicked.connect(lambda: self.__reset_search())
+        self.lines: list[QtWidgets.QLineEdit] = (self.ui.last_name_line, self.ui.name_line, self.ui.middle_name_line, self.ui.street_line,
+                       self.ui.house_line, self.ui.korp_line, self.ui.apart_line)
+        self.ui.action_2.triggered.connect(lambda: self.__update_in_parents())
+        self.ui.add_action.triggered.connect(lambda: self.__add_to_parents())
         self.ui.search_reset_button.setEnabled(False)
 
     def __populate(self) -> None:
@@ -80,18 +87,20 @@ class mainwindow(QtWidgets.QMainWindow):
         values: list[str, str, str, str] = [data[1], data[2], data[3], data[4]]
         for i, parent_table in enumerate(PARENT_TABLES):
             self.mycursor.execute(f"SELECT {parent_table[1]} FROM {parent_table[0]} WHERE {parent_table[2]} = '{values[i]}';")
+            print(self.mycursor.fetchall())
             if self.mycursor.fetchall():
-                numbers.append(self.mycursor.fetchall[0][0])
+                numbers.append(self.mycursor.fetchall()[0][0])
             else:
                 self.mycursor.execute(f"""INSERT INTO {parent_table[0]} ({parent_table[1]}, {parent_table[2]}) VALUES 
-                                      (DEFAULT, '{values[i]}')""")
+                                        (DEFAULT, '{values[i]}')""")
                 self.myconnection.commit()
                 self.mycursor.execute(f"SELECT last_value FROM {parent_table[0]}_{parent_table[1]}_seq;")
                 numbers.append(self.mycursor.fetchall()[0][0])
         return numbers
             
     def __add_entry(self) -> None:
-        """TO-DO: SANITIZE INPUTS, ADD CLIENTSIDE TYPECHECKING, ADD SUPPORT FOR INCOMPLETE ADDITION"""
+        """TO-DO: SANITIZE INPUTS, ADD CLIENTSIDE TYPECHECKING, ADD SUPPORT FOR INCOMPLETE ADDITION, SWAP TO COMBO BOXES"""
+        self.ui.book_table.itemChanged.disconnect()
         new_data = (self.ui.book_table.rowCount()+1, self.ui.last_name_line.text(), self.ui.name_line.text(),
                     self.ui.middle_name_line.text(), self.ui.street_line.text(), self.ui.house_line.text(),
                     self.ui.korp_line.text(), int(self.ui.apart_line.text()), self.ui.phone_line.text())
@@ -103,12 +112,14 @@ class mainwindow(QtWidgets.QMainWindow):
         self.myconnection.commit()
         self.ui.book_table.setRowCount(new_data[0])
         for i, entry in enumerate(new_data[1:]):
-            self.ui.book_table.setItem(new_data[0], i, QTableWidgetItem(entry))
-            self.ui.book_table.item(new_data[0], i).setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.ui.book_table.setItem(new_data[0]-1, i, QTableWidgetItem(entry))
+            self.ui.book_table.item(new_data[0]-1, i).setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.ui.book_table.itemChanged.connect(lambda x:  self.__update_entry(x))
     
     def __get_specific_fkey(self, data: list[str]) -> int:
         parent_table: list[str] = PARENT_TABLES[data[0]]
         self.mycursor.execute(f"SELECT {parent_table[1]} FROM {parent_table[0]} WHERE {parent_table[2]} = '{data[2]}';")
+        print(self.mycursor.fetchall())
         if self.mycursor.fetchall():
             return self.mycursor.fetchall()[0][0]
         else:
@@ -122,8 +133,8 @@ class mainwindow(QtWidgets.QMainWindow):
         new_data: list[int, int, str] = [item.column(), item.row(), item.text()]
         if new_data[0] < 4:
             new_data[2] = self.__get_specific_fkey(new_data)
-        self.mycursor.execute(f"""UPDATE {BOOK_TABLE[0]} SET {BOOK_TABLE[new_data[0]+2]} = {"" if new_data[0]==7 else "'"}
-                                {new_data[2]}{"" if new_data[0]==7 else "'"} WHERE {BOOK_TABLE[1]} = {new_data[1]+1};""")
+        self.mycursor.execute(f"""UPDATE {BOOK_TABLE[0]} SET {BOOK_TABLE[new_data[0]+2]} = {"" if new_data[0]==7 else "'"}{new_data[2]}{"" if new_data[0]==7 else "'"}
+                               WHERE {BOOK_TABLE[1]} = {new_data[1]+1};""")
         self.myconnection.commit()
 
     def __deletion_mode(self) -> None:
@@ -198,8 +209,37 @@ class mainwindow(QtWidgets.QMainWindow):
         self.__populate()
         self.ui.search_reset_button.setEnabled(False)
         self.ui.book_table.itemChanged.connect(lambda x: self.__update_entry(x))
+    
+    def __add_to_parents(self) -> None:
+        for i in range(3):
+           if self.lines[i].text():
+               self.mycursor.execute(f"""INSERT INTO {PARENT_TABLES[i][0]} ({PARENT_TABLES[i][1]}, {PARENT_TABLES[i][2]}) VALUES
+                                     (DEFAULT, '{self.lines[i].text()}')""")
+               self.myconnection.commit()
+    
+    def __update_in_parents(self) -> None:
+        old_text = 0
+        def get_old_text(item: QTableWidgetItem):
+            nonlocal old_text
+            old_text = item.text()
+            self.ui.book_table.itemDoubleClicked.disconnect()
+        self.ui.book_table.itemDoubleClicked.connect(lambda x: get_old_text(x))
+        self.ui.book_table.itemChanged.disconnect()
+        self.ui.book_table.itemChanged.connect(lambda x: update_parents(self, x))
+        def update_parents(window: mainwindow, item: QTableWidgetItem) -> None:
+            window.ui.book_table.itemChanged.disconnect()
+            column: int = item.column()
+            row: int = item.row()
+            self.mycursor.execute(f"""UPDATE {PARENT_TABLES[column][0]} SET {PARENT_TABLES[column][2]} = 
+                              '{self.ui.book_table.currentItem().text()}' WHERE {PARENT_TABLES[column][2]} = '{old_text}';""")
+            window.myconnection.commit()
+            window.__populate()
+            window.ui.book_table.itemChanged.connect(lambda x: window.__update_entry(x))
 
         
+
+       
+
 def db_connection_setup() -> psycopg2.extensions.connection:
     load_dotenv()
     user_name: str = getenv('USER')

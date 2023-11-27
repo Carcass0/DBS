@@ -168,8 +168,43 @@
      <height>26</height>
     </rect>
    </property>
+   <widget class="QMenu" name="menu">
+    <property name="title">
+     <string>Действия с родительскими таблицами</string>
+    </property>
+    <addaction name="action"/>
+    <addaction name="separator"/>
+    <addaction name="add_action"/>
+    <addaction name="action_2"/>
+   </widget>
+   <addaction name="menu"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
+  <action name="action">
+   <property name="text">
+    <string>ДЛЯ ОПЫТНЫХ ПОЛЬЗОВАТЕЛЕЙ</string>
+   </property>
+  </action>
+  <action name="update_action_2">
+   <property name="text">
+    <string>Обновить родительские таблицы</string>
+   </property>
+  </action>
+  <action name="add_action">
+   <property name="text">
+    <string>Добавить в родительские таблицы</string>
+   </property>
+  </action>
+  <action name="update_action">
+   <property name="text">
+    <string>Обновить родительские таблицы</string>
+   </property>
+  </action>
+  <action name="action_2">
+   <property name="text">
+    <string>Обновить в родительских таблицах</string>
+   </property>
+  </action>
  </widget>
  <resources/>
  <connections/>
